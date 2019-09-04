@@ -3,11 +3,11 @@
 #include <assert.h>
 
 static const char* modeNames[] = {
-  "PLAY",
+  "  PLAY",
   "REWIND",
-  "PAUSE",
-  "FF",
-  "FB"
+  " PAUSE",
+  "    FF",
+  "    FB"
 };
 
 /*!
@@ -237,6 +237,21 @@ void VideoPlayer::exitIfNeeded() {
           case SDLK_c:
             _cacheDebug = !_cacheDebug;
             break;
+          case SDLK_r:
+            _frameDisplayed += 100;
+            _mode = PAUSE;
+            break;
+
+          case SDLK_e:
+            _frameDisplayed -= 100;
+            if(_frameDisplayed < 0) _frameDisplayed = 0;
+            _mode = PAUSE;
+            break;
+
+
+          case SDLK_h:
+            _helpOpen = !_helpOpen;
+            break;
         }
       }
         break;
@@ -250,6 +265,7 @@ int VideoPlayer::determineNextFrame() {
       return _frameDisplayed + 1;
 
     case REWIND:
+      if(_frameDisplayed - 1 < 0) return 0;
       return _frameDisplayed - 1;
 
     case PAUSE:
@@ -280,7 +296,8 @@ void VideoPlayer::displayConsecutive() {
     while(!gotVideoPacket) { // until got video stream
       if(av_read_frame(_context, &packet) < 0) {
         printf("couldn't read frame!\n");
-        exit(0);
+        _mode = PAUSE;
+        return;
       }
       if(packet.stream_index == _videoStreamIdx) gotVideoPacket = true;
     }
@@ -334,8 +351,10 @@ void VideoPlayer::displaySeekBackward() {
     if(seekTarget < 0) {
       seekTarget = 0;
       if(seekZero) {
-        printf("warning seek 0 when backward seeking\n");
-        exit(0);
+        printf("warning seek 0 when backward seeking, pausing\n");
+        _mode = PAUSE;
+        _desiredNextFrame = 0;
+        return;
       }
       seekZero = true;
     }
@@ -519,7 +538,16 @@ void VideoPlayer::playback() {
 
   SDL_Color fontColor = {255, 255, 255};
   char status_bar[1024];
-  sprintf(status_bar, "f %05d, c %07.2f MB, t %02d:%02d, m %s %c", _frameDisplayed, _cache.getMB(), _frameDisplayed/60, _frameDisplayed%60, getModeName(_mode), usedCache ? 'C':' ');
+
+  _ftAvg = 0.9 * _ftAvg + 0.1 * _frameTimer.getMs();
+  sprintf(status_bar, "f %05d, c %05.0f MB, t %02d:%02d, ft %05.2f, m %s %c", _frameDisplayed, _cache.getMB(), _frameDisplayed/60, _frameDisplayed%60, _ftAvg, getModeName(_mode), usedCache ? 'C':' ');
+
+  if(_helpOpen) {
+    char* ptr = status_bar;
+    while(*ptr) ptr++;
+    sprintf(ptr, " h: help | d: < | f: > | e: << | r: >> | j: rewind | k: pause | l: play | c: debug");
+  }
+  _frameTimer.start();
   SDL_Surface* fontSurface = TTF_RenderText_Solid(_font, status_bar, fontColor);
   SDL_Texture* fontTexture = SDL_CreateTextureFromSurface(_renderer, fontSurface);
   int texW = 0;
@@ -537,6 +565,7 @@ void VideoPlayer::playback() {
   if(_cacheDebug)
     debugDrawCache();
   SDL_RenderPresent(_renderer);
+
 
   SDL_FreeSurface(fontSurface);
   SDL_DestroyTexture(fontTexture);

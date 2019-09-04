@@ -3,14 +3,18 @@
 
 int main(int argc, char** argv) {
 
-  // check arguments
-  if(argc != 3) {
+  uint64_t cacheSize;
+  if(argc == 3) {
+    cacheSize = atol(argv[2]);
+  } else if(argc == 2) {
+    cacheSize = 2048;
+  } else {
     printf("usage: video <filename> <cacheMB>\n");
     return 1;
   }
 
   // setup player
-  VideoPlayer player(argv[1], atol(argv[2]));
+  VideoPlayer player(argv[1], cacheSize);
 
   // run player
   while(true) {
